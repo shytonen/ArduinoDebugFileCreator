@@ -7,7 +7,6 @@
 # Builds a debug file for arduino to debug     #
 # self-written or third-party libraries.       #
 #                                              #
-# No warranty. Free license :)                 #
 ################################################
 
 
@@ -73,9 +72,6 @@ FindHeaderFilesFromPath "$LIB_PATH/*/*/*"
 sort "$OUTPUT_PATH/includeFiles" |uniq >"$OUTPUT_PATH/sortedIncludes";
 rm "$OUTPUT_PATH/includeFiles";
 
-## TODO: Here could be a possibility to stop the program to correct the order of include files manually
-##       Now it's alphabetical
-
 # Create list of libraries for the dialog
 liblist=""
 n=1
@@ -87,62 +83,114 @@ done
 
 rm "$OUTPUT_PATH/sortedIncludes";
 
-overwritedLibraries='';
+overwrittenLibraries='';
 
 # Start the dialog
 choices=$(dialog --stdout --checklist 'Select libraries to debug:' 40 60 60 $liblist);
 
-# Create new file of selections
-if [ $? -eq 0 ] ;
+#sortedChoices=$(dialog --stdout --radiolist $choices 'Sort libraries:' 40 60 60 --cancel-label "Move up");
+
+
+# Prepare include files for selection dialog
+echo -n "" >"$OUTPUT_PATH/dialogSort";
+i=1
+
+for choice in $choices ;
+do
+	echo -n $choice >>"$OUTPUT_PATH/dialogSort";
+	echo -n " " >>"$OUTPUT_PATH/dialogSort";
+	echo $i >>"$OUTPUT_PATH/dialogSort";
+	i=$[i+1]
+done
+
+while true ;
+do
+	test=$(dialog --stdout --clear --extra-button --extra-label "Move up" \
+			--menu "Change the order of the include files if it matters:" 40 60 60 \
+			--file "$OUTPUT_PATH/dialogSort" >"$OUTPUT_PATH/selection")
+    
+	# If move-up button was not clicked, move forward
+	retval=$?
+	if [ $retval -ne 3 ] ;
+	then
+		break;
+	fi
+
+	# Reorder the dialogSort
+	cp "$OUTPUT_PATH/dialogSort" "$OUTPUT_PATH/copy";
+	cat "$OUTPUT_PATH/selection" >"$OUTPUT_PATH/dialogSort";
+	echo " 1" >>"$OUTPUT_PATH/dialogSort";
+	cp "$OUTPUT_PATH/dialogSort" "$OUTPUT_PATH/firstline";
+	cat "$OUTPUT_PATH/copy" >>"$OUTPUT_PATH/dialogSort";
+
+	cat "$OUTPUT_PATH/dialogSort" \
+		|grep -v -f "$OUTPUT_PATH/selection" \
+		>>"$OUTPUT_PATH/firstline";
+
+	cat "$OUTPUT_PATH/firstline" >"$OUTPUT_PATH/dialogSort";
+	rm "$OUTPUT_PATH/firstline";
+	rm "$OUTPUT_PATH/copy";
+done
+
+rm "$OUTPUT_PATH/selection";
+
+# If cancel was pressed
+if [ $retval -eq 1 ] ;
 then
-	echo "Building an Arduino debug file of the selected libraries...";
-
-	echo '/**********************' >>$OUTPUT_FILE;
-	echo ' * LIB HEADER FILES   *' >>$OUTPUT_FILE;
-	echo ' *********************/' >>$OUTPUT_FILE;
-	
-	# Add header files on top of the file
-	for choice in $choices ;
-	do
-		h_extension='.h';
-		h_file=$choice$h_extension;
-		
-		file=`find $LIB_PATH -name $h_file`;
-		if [ -n "$file" ] ;
-		then
-			overwritedLibraries="$overwritedLibraries $choice";
-			
-			echo "Parsing $h_file...";
-			cat $file >>$OUTPUT_FILE;
-			echo '' >>$OUTPUT_FILE;
-		else
-			echo "Couldn't parse file: $h_file";
-		fi
-	done
-
-	echo '/**********************' >>$OUTPUT_FILE;
-	echo ' * LIB SOURCE FILES   *' >>$OUTPUT_FILE;
-	echo ' *********************/' >>$OUTPUT_FILE;
-	
-	# Add source files next
-	for choice in $choices ;
-	do
-		cpp_extension='.cpp';
-		cpp_file=$choice$cpp_extension;
-		
-		file=`find $LIB_PATH -name $cpp_file`;
-		if [ -n "$file" ] ;
-		then
-			echo "Parsing $cpp_file...";
-			cat $file >>$OUTPUT_FILE;
-			echo '' >>$OUTPUT_FILE;
-		else
-			echo "Couldn't parse file: $cpp_file";
-		fi
-	done  
-else
+	rm "$OUTPUT_PATH/dialogSort";
 	echo "Canceled";
+	exit;
 fi
+
+# Remove numbers that was needed for the dialogSort
+cat "$OUTPUT_PATH/dialogSort" |awk -F " " '{print $1}' >"$OUTPUT_PATH/selections";
+rm "$OUTPUT_PATH/dialogSort";
+
+echo "Building an Arduino debug file of the selected libraries...";
+
+echo '/**********************' >>$OUTPUT_FILE;
+echo ' * LIB HEADER FILES   *' >>$OUTPUT_FILE;
+echo ' *********************/' >>$OUTPUT_FILE;
+
+# Add header files on top of the file
+for choice in `cat "$OUTPUT_PATH/selections"` ;
+do
+	h_extension='.h';
+	h_file=$choice$h_extension;
+	
+	file=`find $LIB_PATH -name $h_file`;
+	if [ -n "$file" ] ;
+	then
+		overwrittenLibraries="$overwrittenLibraries $choice";
+		
+		echo "Parsing $h_file...";
+		cat $file >>$OUTPUT_FILE;
+		echo '' >>$OUTPUT_FILE;
+	else
+		echo "Couldn't parse file: $h_file";
+	fi
+done
+
+echo '/**********************' >>$OUTPUT_FILE;
+echo ' * LIB SOURCE FILES   *' >>$OUTPUT_FILE;
+echo ' *********************/' >>$OUTPUT_FILE;
+
+# Add source files next
+for choice in `cat "$OUTPUT_PATH/selections"` ;
+do
+	cpp_extension='.cpp';
+	cpp_file=$choice$cpp_extension;
+	
+	file=`find $LIB_PATH -name $cpp_file`;
+	if [ -n "$file" ] ;
+	then
+		echo "Parsing $cpp_file...";
+		cat $file >>$OUTPUT_FILE;
+		echo '' >>$OUTPUT_FILE;
+	else
+		echo "Couldn't parse file: $cpp_file";
+	fi
+done  
 
 echo '/**********************' >>$OUTPUT_FILE;
 echo ' * APPLICATION        *' >>$OUTPUT_FILE;
@@ -151,7 +199,7 @@ echo ' *********************/' >>$OUTPUT_FILE;
 cat $INPUT_FILE >>$OUTPUT_FILE;
 
 # Remove includes of libraries that are overwritten by the debug application
-for lib in $overwritedLibraries ;
+for lib in $overwrittenLibraries ;
 do
 	sed -i -- 's|^#include.\+'"$lib"'.\+||g' "$OUTPUT_FILE";
 done
@@ -190,6 +238,7 @@ cat "$OUTPUT_PATH/copy.ino" >>"$OUTPUT_FILE"
 rm "$OUTPUT_PATH/copy.ino";
 rm "$OUTPUT_PATH/includes";
 rm "$OUTPUT_PATH/sortedIncludes";
+rm "$OUTPUT_PATH/selections";
 
 echo "Done." 
 echo "Debug file can be found from $OUTPUT_FILE";
