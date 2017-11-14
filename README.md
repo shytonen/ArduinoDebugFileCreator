@@ -1,10 +1,11 @@
 # ArduinoDebugFileCreator
-Bash script that creates a debug file for arduino to debug self-written or third-party libraries.   
-
+As the Arduino doesn't support debugging of included third-party or self-written libraries, created a simple script that combines library files in one debug.ino.   
+   
+The script finds included files the project uses and asks from user which of them should be combined together. Combined libraries then needs to be removed from _arduino/libraries_ path while debugging.
+   
 Usage:   
 Give access rights: chmod u+x ./ArduinoDebugFileCreator   
-Make sure dialog is installed on your linux.   
+Dialog needs to be installed on your linux.   
 `./ArduinoDebugFileCreator program.ino library_dir [outputfile.ino]`   
-
-Choose the libraries you want to debug. The script will combine the files inside the outputfile.ino.
+   
 ![screenshot](screenshot.jpg "Script uses _dialog_ to select libraries")
