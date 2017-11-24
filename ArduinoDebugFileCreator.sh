@@ -3,7 +3,7 @@
 ################################################
 # Created by shytonen (s.hytonen@hotmail.com)  #
 # 13. Nov 2017                                 #
-#                                              # 
+#                                              #
 # Builds a debug file for arduino to debug     #
 # self-written or third-party libraries.       #
 #                                              #
@@ -41,8 +41,10 @@ echo -n '' >"$OUTPUT_PATH/includeFiles";
 function FindHeaderFilesFromPath {
 	for file in $1 ;
 	do
-		# If the file is .cpp or .h file
-		if [ -f $file ] && ! grep -q ".h$\|cpp$" $file ;
+		# If the file is .h, .c, .cpp or .ino type
+		if [ -f $file ] ;
+		then
+		if [[ $file == *.h || $file == *.cpp || $file == *.ino || $file == *.c ]] ;
 		then
 			# Collect all the include files found and save them to a file
 			# Remove the first and the last characters " " or < >
@@ -58,12 +60,13 @@ function FindHeaderFilesFromPath {
 			|sed 's/.\+\///g' \
 			|sed 's/\ //g' \
 			|sed 's/\r//g' \
-			>>$OUTPUT_PATH/includeFiles;
-		fi
+			>>"$OUTPUT_PATH/includeFiles";
+		fi; fi
 	done
 }
 
 # Find header files from LIB_PATH and its subdirectories
+FindHeaderFilesFromPath "$INPUT_PATH/*"
 FindHeaderFilesFromPath "$LIB_PATH/*"
 FindHeaderFilesFromPath "$LIB_PATH/*/*"
 FindHeaderFilesFromPath "$LIB_PATH/*/*/*"
